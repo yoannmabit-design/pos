@@ -1,0 +1,38 @@
+{
+  "name": "Yoann's Bakery — POS",
+  "short_name": "POS",
+  "description": "Caisse du marché : ticket, encaissement, rendu de monnaie.",
+  "start_url": "pos.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F5E7D3",
+  "theme_color": "#F5E7D3",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "icons/pos-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/pos-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/pos-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/pos-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
