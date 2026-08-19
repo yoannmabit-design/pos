@@ -191,7 +191,7 @@
   /* ---------- remise senior ---------- */
   .senior{
     width:100%;
-    margin-top:16px;
+    margin-top:0;
     border-radius:var(--radius);
     border:2px solid var(--mint-ink);
     background:var(--mint);
@@ -322,7 +322,35 @@
     background:var(--field);
     border-radius:16px;
     padding:12px 14px;
+    transition:transform .12s ease,box-shadow .12s ease;
   }
+
+  .ligne-touche.drag{
+    box-shadow:0 8px 20px rgba(46,42,36,.25);
+    background:var(--cream);
+    transition:none;
+    position:relative;
+    z-index:2;
+  }
+
+  .poignee{
+    flex:0 0 auto;
+    width:40px;
+    height:40px;
+    border-radius:12px;
+    border:none;
+    background:transparent;
+    color:rgba(46,42,36,.5);
+    font-size:22px;
+    line-height:1;
+    cursor:grab;
+    touch-action:none;
+    -webkit-user-select:none;
+    user-select:none;
+  }
+
+  .poignee:active{cursor:grabbing;}
+  .poignee:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}
 
   .ligne-touche .lib{
     flex:1 1 auto;
@@ -450,16 +478,6 @@
 <section class="screen" id="screen-ticket">
   <div class="grid" id="grid"></div>
 
-  <button class="senior" id="senior" type="button" hidden aria-pressed="false">
-    <span id="senior-libelle">Senior citizen −12%</span>
-    <span class="mark" id="senior-mark" aria-hidden="true"></span>
-  </button>
-
-  <div class="remise-ligne" id="remise-ligne" hidden>
-    <span id="remise-libelle">Senior citizen</span>
-    <span id="remise-montant">0</span>
-  </div>
-
   <div class="total">
     <span class="label">TOTAL</span>
     <span class="amount display" id="total">0</span>
@@ -470,6 +488,16 @@
 
 <!-- ===== écran 2 : encaissement ===== -->
 <section class="screen" id="screen-pay" hidden>
+  <button class="senior" id="senior" type="button" hidden aria-pressed="false">
+    <span id="senior-libelle">Senior citizen −12%</span>
+    <span class="mark" id="senior-mark" aria-hidden="true"></span>
+  </button>
+
+  <div class="remise-ligne" id="remise-ligne" hidden>
+    <span id="remise-libelle">Senior citizen</span>
+    <span id="remise-montant">0</span>
+  </div>
+
   <div class="total">
     <span class="label">TOTAL</span>
     <span class="amount display" id="pay-total">0</span>
@@ -492,6 +520,7 @@
   <div class="msg" id="msg" hidden></div>
 
   <h2 class="sect-titre">Touches</h2>
+  <p class="aide">Fais glisser une touche par sa poignée pour la déplacer. L'ordre ici est celui de la grille de caisse.</p>
   <div class="liste-touches" id="liste-touches"></div>
 
   <h2 class="sect-titre">Nouvelle touche</h2>
@@ -676,7 +705,8 @@
     var remise = calculerRemise();
     var somme = calculerTotal();
 
-    total.textContent = fmt(somme);
+    total.textContent = fmt(calculerBrut());
+    payTotal.textContent = fmt(somme);
     next.disabled = calculerBrut() <= 0;
 
     var afficheRemise = remise > 0;
@@ -685,6 +715,9 @@
       remiseLib.textContent = libelleSenior(tauxSenior);
       remiseMontant.textContent = "\u2212" + fmt(remise);
     }
+
+    // la monnaie dépend du total : elle se recalcule quand la remise bouge
+    if(!vuePaie.hidden) majMonnaie();
   }
 
   function majSenior(){
@@ -810,7 +843,6 @@
   }
 
   next.addEventListener("click", function(){
-    payTotal.textContent = fmt(calculerTotal());
     cash.value = "";
     majMonnaie();
     afficher("paie");
@@ -863,6 +895,88 @@
     msg.hidden = true;
   }
 
+  /* Réordonnancement : on déplace le nœud dans le DOM pendant le glissement,
+     puis on reconstruit le brouillon depuis l'ordre affiché au relâchement.
+     Redessiner la liste en cours de glissement casserait la capture du doigt. */
+
+  function relireOrdre(){
+    var ordre = [];
+    Array.prototype.forEach.call(listeTouches.children, function(el){
+      var code = el.getAttribute("data-code");
+      if(!code) return;
+      brouillon.forEach(function(a){
+        if(a.code === code) ordre.push(a);
+      });
+    });
+    if(ordre.length === brouillon.length) brouillon = ordre;
+  }
+
+  function deplacer(ligne, sens){
+    var freres = Array.prototype.filter.call(listeTouches.children, function(el){
+      return el.getAttribute("data-code");
+    });
+    var i = freres.indexOf(ligne);
+    var j = i + sens;
+    if(i < 0 || j < 0 || j >= freres.length) return;
+    if(sens < 0) listeTouches.insertBefore(ligne, freres[j]);
+    else listeTouches.insertBefore(ligne, freres[j].nextSibling);
+    relireOrdre();
+    message("Ordre modifié. Enregistre pour valider.", true);
+  }
+
+  function brancherGlissement(poignee, ligne){
+    var actif = null;
+
+    poignee.addEventListener("pointerdown", function(e){
+      e.preventDefault();
+      actif = { y: e.clientY, id: e.pointerId };
+      ligne.classList.add("drag");
+      try { poignee.setPointerCapture(e.pointerId); } catch(err){}
+    });
+
+    poignee.addEventListener("pointermove", function(e){
+      if(!actif) return;
+      e.preventDefault();
+
+      ligne.style.transform = "translateY(" + (e.clientY - actif.y) + "px)";
+
+      var cible = null;
+      Array.prototype.forEach.call(listeTouches.children, function(el){
+        if(el === ligne || cible || !el.getAttribute("data-code")) return;
+        var r = el.getBoundingClientRect();
+        if(e.clientY < r.top + r.height / 2) cible = el;
+      });
+
+      var avant = ligne.nextSibling;
+      if(cible) listeTouches.insertBefore(ligne, cible);
+      else listeTouches.appendChild(ligne);
+
+      // repositionné : on repart d'un décalage nul pour éviter le sursaut
+      if(ligne.nextSibling !== avant){
+        actif.y = e.clientY;
+        ligne.style.transform = "translateY(0px)";
+      }
+    });
+
+    function relacher(e){
+      if(!actif) return;
+      actif = null;
+      ligne.classList.remove("drag");
+      ligne.style.transform = "";
+      try { poignee.releasePointerCapture(e.pointerId); } catch(err){}
+      relireOrdre();
+      message("Ordre modifié. Enregistre pour valider.", true);
+    }
+
+    poignee.addEventListener("pointerup", relacher);
+    poignee.addEventListener("pointercancel", relacher);
+
+    poignee.addEventListener("keydown", function(e){
+      if(e.key === "ArrowUp"){ e.preventDefault(); deplacer(ligne, -1); poignee.focus(); }
+      else if(e.key === "ArrowDown"){ e.preventDefault(); deplacer(ligne, 1); poignee.focus(); }
+    });
+  }
+
   function dessinerListe(){
     listeTouches.textContent = "";
 
@@ -878,6 +992,14 @@
     brouillon.forEach(function(a){
       var ligne = document.createElement("div");
       ligne.className = "ligne-touche";
+      ligne.setAttribute("data-code", a.code);
+
+      var poignee = document.createElement("button");
+      poignee.className = "poignee";
+      poignee.type = "button";
+      poignee.textContent = "\u2807";
+      poignee.setAttribute("aria-label", "Déplacer " + a.nom + " (flèches haut et bas au clavier)");
+      brancherGlissement(poignee, ligne);
 
       var lib = document.createElement("span");
       lib.className = "lib";
@@ -898,6 +1020,7 @@
         message("Touche « " + a.nom + " » retirée. Enregistre pour valider.", true);
       });
 
+      ligne.appendChild(poignee);
       ligne.appendChild(lib);
       ligne.appendChild(mnt);
       ligne.appendChild(suppr);
