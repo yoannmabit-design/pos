@@ -8,7 +8,7 @@
    sinon l'appareil garde l'ancienne caisse en cache.
 */
 
-var CACHE = "yfb-pos-v1";
+var CACHE = "yfb-pos-v2";
 
 var RESSOURCES = [
   "pos.html",
